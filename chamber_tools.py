@@ -7,10 +7,10 @@ from lmfit import Model, Parameters
 def calc_flux(slope, pres, temp, system_height):
     # pres in [hPa]
     # temp in [K]
-    # system_height in [m2]
+    # system_height in [m]
     # -> returns flux in [mg m-2 s-1]
     if np.isnan(pres):
-        flux = slope*(44.01/0.0224)*(273.15/(temp))*(system_height)
+        flux = slope*(44.01/0.0224)*(273.15/(temp))*(system_height)*0.001
     else:
         flux = slope * 44.01*pres*100 * system_height/(8.31446*temp)*0.001
     return flux
