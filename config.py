@@ -11,7 +11,7 @@ remove_from_start = 15
 min_length = 80
 
 # Use exponential or linear fits for light response curves, "exponential"/"linear"
-fit_type = "exponential"
+fit_type = "linear"
 
 # Quality control
 

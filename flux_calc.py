@@ -106,6 +106,7 @@ class ChamberFluxCalculator:
         # Browse through dates
         for date in meta_data.Date.unique():
             data = pd.read_csv(self.data_path+'chamber_data_'+str(date)+'.csv', index_col=0)
+
             data.index = pd.to_datetime(data.index, format="%Y-%m-%d %H:%M:%S")
             
             # Browse through collars
@@ -132,41 +133,40 @@ class ChamberFluxCalculator:
 
                     if len(cur) < 60:
                         print('Measurement too short: '+str(date)+', Collar: '+ str(collar) + ', Closure: '+str(cl))
-                        break
 
-                    flux, nrmse, mean_par, sd_par, mean_temp, len_closure, co2_hat, slope = self.calc_flux_and_stats(cur, mean_temp, pres, system_height)
-
-                    nrmse_not_ok = check_nrmse(flux, nrmse)
-
-                    while len_closure >= self.min_length and (nrmse_not_ok or sd_par>self.par_sd_limit):
-                        end -= dt.timedelta(seconds=10)
-                        cur = data[start:end]
-
+                    else:
                         flux, nrmse, mean_par, sd_par, mean_temp, len_closure, co2_hat, slope = self.calc_flux_and_stats(cur, mean_temp, pres, system_height)
+
                         nrmse_not_ok = check_nrmse(flux, nrmse)
 
-                    if np.isnan(mean_par):
-                        print('PAR missing: '+str(date)+', Collar: '+ str(collar) + ', Closure: '+str(cl))
+                        while len_closure >= self.min_length and (nrmse_not_ok or sd_par>self.par_sd_limit):
+                            end -= dt.timedelta(seconds=10)
+                            cur = data[start:end]
 
-                    if np.isnan(mean_temp):
-                        print('Temperature missing: '+str(date)+', Collar: '+ str(collar) + ', Closure: '+str(cl))
-                        break
+                            flux, nrmse, mean_par, sd_par, mean_temp, len_closure, co2_hat, slope = self.calc_flux_and_stats(cur, mean_temp, pres, system_height)
+                            nrmse_not_ok = check_nrmse(flux, nrmse)
 
-                    if len_closure > self.min_length:
-                        results.loc[c] = date, collar, cl, flux, nrmse, mean_par
-                        meas_ok = True
-                    else:
-                        meas_ok = False
+                        if np.isnan(mean_par):
+                            print('PAR missing: '+str(date)+', Collar: '+ str(collar) + ', Closure: '+str(cl))
 
-                    if self.plotting:
-                        self.make_plot(fig, collar, orig_meas, cur, cl, meas_ok, co2_hat, slope, nrmse, sd_par)
+                        if np.isnan(mean_temp):
+                            print('Temperature missing: '+str(date)+', Collar: '+ str(collar) + ', Closure: '+str(cl))
 
-                    c+=1
-                    cl+=1
+                        if len_closure > self.min_length and ~np.isnan(mean_temp):
+                            results.loc[c] = date, collar, cl, flux, nrmse, mean_par
+                            meas_ok = True
+                            if self.plotting:
+                                self.make_plot(fig, collar, orig_meas, cur, cl, meas_ok, co2_hat, slope, nrmse, sd_par)
+                        else:
+                            meas_ok = False
+
+                        c+=1
+                        cl+=1
 
                 if self.plotting:
                     fig.tight_layout()
                     fig.savefig('Results/'+str(date)+'_'+str(collar)+'.png')
+                    plt.close()
 
         return results 
 
