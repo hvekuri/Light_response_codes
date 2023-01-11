@@ -10,7 +10,7 @@ remove_from_start = 15
 # Minimum length of accetable measurement in seconds
 min_length = 80
 
-# Use exponential or linear fits for light response curves, "exponential"/"linear"
+# Use exponential or linear fits for calculating fluxes, "exponential"/"linear"
 fit_type = "linear"
 
 # Quality control

@@ -153,16 +153,17 @@ class ChamberFluxCalculator:
                             print('Temperature missing: '+str(date)+', Collar: '+ str(collar) + ', Closure: '+str(cl))
 
                         if np.isnan(pres):
-                            print('Pressure missing: '+str(date)+', Collar: '+ str(collar) + ', Closure: '+str(cl))
-                            print('Using ideal gas volume to calculate flux')
+                            print('Pressure missing: '+str(date)+', Collar: '+ str(collar) + ', Closure: '+str(cl)+', using ideal gas volume to calculate flux')
 
                         if len_closure > self.min_length and ~np.isnan(mean_temp):
                             results.loc[c] = date, collar, cl, flux, nrmse, mean_par
                             meas_ok = True
-                            if self.plotting:
-                                self.make_plot(fig, collar, orig_meas, cur, cl, meas_ok, co2_hat, slope, nrmse, sd_par)
+                            
                         else:
                             meas_ok = False
+
+                        if self.plotting:
+                                self.make_plot(fig, collar, orig_meas, cur, cl, meas_ok, co2_hat, slope, nrmse, sd_par)
 
                         c+=1
                         cl+=1
