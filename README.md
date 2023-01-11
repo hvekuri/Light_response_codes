@@ -1,4 +1,4 @@
-# Chamber-codes
+# Light_response_codes
 
 ## Requirements
 Python 3.7
