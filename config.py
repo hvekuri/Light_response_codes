@@ -21,12 +21,16 @@ par_sd_limit = 100
 # If absolute value of flux > 0.1 and if NRMSE > nrmse_limit, the measurement is discarded and the flux is not calculated, FEEL FREE TO CHANGE THE LIMIT
 nrmse_limit = 0.1
 
-# Plotting
-plotting = True  # If False, no plots are made
 
 # Path to data, data must include date, collar ID, flux and PAR
-flux_data_path = 'Results/flux_results.csv'
+flux_data_path = 'Input/fluxdata21.csv'
 
-# Bounds for parameters: min, max
-alpha_bounds = -0.1, -0.00000001
-GPmax_bounds = -5, -0.0000001
+GPP_model = 'GPP_VI'
+
+# Bounds for parameters, order: alpha min, alpha max, GPmax min GPmax max, Rd0 min, Rd0 max, Rs0 min, Rs0 max
+param_bounds = [-5, -1e-5, -10, 1e-5, 0, 2, 0, 2]
+
+Es = 308.56
+
+bd = 5000
+
