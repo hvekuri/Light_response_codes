@@ -77,4 +77,11 @@ def feksp_taylor(secs, a, b, c):
 def fGPP(PAR, alpha, GPmax):
     return alpha*GPmax*PAR/(alpha*PAR + GPmax)
 
+def fGPP_VI(PAR, VI, alpha, GPmax):
+    return alpha*GPmax*PAR*VI/(alpha*PAR + GPmax*VI)
 
+
+def fRespiration_VI(Tair, Tsoil, VI, Rd0, Rs0, Es, bd):
+    # Tair and Tsoil in K
+    T0 = 10
+    return VI*Rd0*np.exp(bd*(1/(T0+273)-(1/(Tair)))) + Rs0*np.exp(Es*(1/56.02-(1/(Tsoil-273.15+46.02))))
