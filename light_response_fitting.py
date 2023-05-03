@@ -1,95 +1,129 @@
 import pandas as pd 
 import numpy as np
 import matplotlib.pyplot as plt
-from chamber_tools import fGPP
+from chamber_tools import fGPP, fGPP_VI, fRespiration_VI
 from lmfit import Model, Parameters
 import config
 
 
 class LightResponseFitting:
-    def __init__(self, data_path, alpha_min, alpha_max, GPmax_min, GPmax_max, plotting):
+    def __init__(self, data_path, param_bounds, GPP_model):
         self.data_path = data_path
-        self.alpha_min = alpha_min
-        self.alpha_max = alpha_max
-        self.GPmax_min = GPmax_min
-        self.GPmax_max = GPmax_max
-        self.plotting = plotting
+        self.param_bounds = param_bounds
+        self.GPP_model = GPP_model
 
-    def fit_LR(self, GPP, par):
+    def fit_LR(self, GPP, par, rvi):
         # Define the fit model
-        GPPmodel = Model(fGPP)
+        GPPmodel = Model(fGPP_VI, independent_vars = ['PAR', 'VI'])
 
         # Use Parameter class for model params
         params = Parameters()
-        params.add_many(("alpha", -0.001, True, self.alpha_min, self.alpha_max), ("GPmax", -1,
-                                                                                              True, self.GPmax_min, self.GPmax_max))
+        params.add_many(("alpha", -0.001, True, self.param_bounds[0], self.param_bounds[1]), ("GPmax", -1,
+                                                                                              True, self.param_bounds[2], self.param_bounds[3]))
 
         # Fit
-        result = GPPmodel.fit(GPP, PAR=par,
-                              alpha=params["alpha"], GPmax=params["GPmax"], method="leastsq")
+        result = GPPmodel.fit(GPP, PAR=par, VI=rvi,
+                          alpha=params["alpha"], GPmax=params["GPmax"], method="leastsq")
 
-        alpha_fit = result.params['alpha'].value
-        GPmax_fit = result.params['GPmax'].value
-        alpha_se = result.params['alpha'].stderr
-        GPmax_se = result.params['GPmax'].stderr
+        return result
 
-        GP1200 = fGPP(1200, alpha_fit, GPmax_fit)
-        if(result.covar is not None):
-            GP1200_unc = result.eval_uncertainty(sigma=1.96, PAR=1200)[0]
-        else:
-            GP1200_unc = np.nan
+    def fit_TR(self, Reco, tair, tsoil, rvi):
+        # Define the fit model
+        Rmodel = Model(fRespiration_VI, independent_vars = ['Tair', 'Tsoil', 'VI'])
 
-        return alpha_fit, alpha_se, GPmax_fit, GPmax_se, GP1200, GP1200_unc, result
+        # Use Parameter class for model params
+        params = Parameters()
+        
+        min_Rd0 = config.param_bounds[4]
+        max_Rd0 = config.param_bounds[5]
+        params.add('Rd0', 0.1, True, min_Rd0, max_Rd0)
 
-    def make_plot(self, par, GPP, result, alpha, GPmax, collar, date):
-        fig, ax = plt.subplots()
-        collar = str(collar)
-        # Calculate the fitted function and 2-sigma uncertainty at arbitary x
-        xp = np.linspace(0, 2000)
-        GPP_fit = fGPP(xp, alpha, GPmax)
-        if(result.covar is not None):
-            GPP_unc = result.eval_uncertainty(sigma=1.96, PAR=xp)
-            ax.fill_between(xp, GPP_fit-GPP_unc, GPP_fit +
-                            GPP_unc, alpha=0.5, color="grey")
-        ax.scatter(par, GPP, s=6, c='k')
-        ax.plot(xp, GPP_fit, c='k', label="collar: "+str(collar))
-        ax.set_title("Collar " + collar)
-        ax.set_xlabel("PAR [$\mu$mol m$^-$$^2$ s$^-$$^1$]")
-        ax.set_ylabel("GPP [mg CO$_2$ m$^-$$^2$ s$^-$$^1$]")
-        ax.grid()
-        fig.tight_layout()
-        fig.savefig('Results/LR_'+str(date)+"_"+str(collar)+".png")
+        min_Rs0 = config.param_bounds[6]
+        max_Rs0 = config.param_bounds[7]
+        params.add('Rs0', value=0.1, vary=True, min=min_Rs0, max=max_Rs0)
+
+        params.add('Es', value=config.Es, vary=False)
+
+        params.add('bd', value=config.bd, vary=False)
+
+        # Fit
+        result = Rmodel.fit(Reco, Tair=tair, Tsoil = tsoil, VI = rvi,
+                          Rs0=params["Rs0"], Rd0=params["Rd0"], Es = params['Es'], bd = params['bd'], method="leastsq")
+
+
+        return result
 
 
     def run(self):
-        results = pd.DataFrame(columns=["Date", "Collar", "Alpha", "Alpha_se", "GPmax", "GPmax_se", "NEE1200", "GP1200", "GP1200unc", "Reco"])
+        results = pd.DataFrame()
         idx = 0
 
         data = pd.read_csv(self.data_path)
+
+        # Drop empty rows
+        data = data[data.PAR.notnull()]
         data.Date = pd.to_datetime(data.Date).dt.date
+
+        # TEMPERATURE RESPONSES
+        resp_params = pd.DataFrame()
+
+        for id in data.ID.unique():
+            cur = data[data.ID==id]
+            resp_data = cur[cur.PAR<10].copy()
+            tair = resp_data['T_air']
+            tsoil = resp_data['T_soil']
+            reco = resp_data['Flux']
+            rvi = resp_data['VI']
+
+            result = self.fit_TR(reco, tair, tsoil, rvi)
+
+            for p in ['Rd0', 'Rs0', 'Es', 'bd']:
+                resp_params.loc[id, p] = result.params[p].value
+                resp_params.loc[id, p+'_sd'] = result.params[p].stderr
+
+
+        # LIGHT RESPONSES
         for date in data.Date.unique():
-            for collar in data[data.Date==date].Collar.unique():
-                cur = data[(data.Date==date) & (data.Collar==collar) & (data.PAR.notnull())]
+            for id in data[data.Date==date].ID.unique():
+                cur = data[(data.Date==date) & (data.ID==id) & (data.VI>0)]
                 if len(cur) >= 3 and len(cur[cur.PAR<10])>0:
 
-                    Reco = cur[cur.PAR<10].Flux.values[0]
+                    Reco = cur[(cur.PAR<10)].Flux.values.mean()
 
                     par = np.array(cur.PAR)
                     GPP = np.array(cur.Flux-Reco)
 
-                    alpha_fit, alpha_se, GPmax_fit, GPmax_se, GP1200, GP1200_unc,  result = self.fit_LR(
-                        GPP, par)
+                    if self.GPP_model == 'GPP_VI':
+                        rvi = np.array(cur.VI)
+                    else:
+                        rvi = np.ones(len(par))
 
-                    results.loc[idx] = date, collar, alpha_fit, alpha_se, GPmax_fit, GPmax_se, GP1200 + \
-                        Reco, GP1200, GP1200_unc, Reco
+                   
+                    if len(cur[(cur.PAR>10) & (cur.VI>0)]) >= 2:
 
-                    if self.plotting:
-                        self.make_plot(par, GPP, result, alpha_fit, GPmax_fit, collar, date)
+                        result = self.fit_LR(
+                            GPP, par, rvi)
 
-                    idx += 1
+                        results.loc[idx, 'Date'] = date
+                        results.loc[idx, 'ID'] = id
 
-        results.to_csv('Results/light_responses.csv', index = False)
+                        for p in ['alpha', 'GPmax']:
+                            results.loc[idx, p] = result.params[p].value
+                            results.loc[idx, p+'_sd'] = result.params[p].stderr
+
+                        results.loc[idx, 'Reco'] = Reco
+     
+                        idx += 1
+
+        for id in resp_params.index.unique():
+            for var in resp_params.columns:
+                results.loc[results.ID==id, var] = resp_params.loc[id, var]
+
+        
+        results.to_csv('Results/fit_params.csv', index = False)
+        return results
+
 
 if __name__ == "__main__":
-    lr_fitter = LightResponseFitting(config.flux_data_path, config.alpha_bounds[0], config.alpha_bounds[1], config.GPmax_bounds[0], config.GPmax_bounds[1], config.plotting)
+    lr_fitter = LightResponseFitting(config.flux_data_path, config.param_bounds, config.GPP_model)
     lr_fitter.run()
