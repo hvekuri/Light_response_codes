@@ -58,11 +58,11 @@ class LightResponseFitting:
         results = pd.DataFrame()
         idx = 0
 
-        data = pd.read_csv(self.data_path)
+        data = pd.read_csv(self.data_path, delimiter=";")
 
         # Drop empty rows
         data = data[data.PAR.notnull()]
-        data.Date = pd.to_datetime(data.Date).dt.date
+        data.Date = pd.to_datetime(data.Date, format="%d.%m.%Y").dt.date
 
         # TEMPERATURE RESPONSES
         resp_params = pd.DataFrame()
